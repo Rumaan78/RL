@@ -1,0 +1,118 @@
+import numpy as np
+import random
+import tensorflow as tf
+from tensorflow.keras import layers
+
+# Define the environment
+grid_size = 5  # 5x5 grid
+n_actions = 4  # Up, Down, Left, Right
+n_states = grid_size * grid_size  # 5x5 grid
+castle_pos = (4, 4)  # Castle location at (4, 4)
+obstacles = [(2, 2), (3, 1)]  # Example obstacle positions
+
+# Q-table initialization
+q_table = np.zeros((n_states, n_actions))
+
+# Prioritized Experience Replay setup
+class PER:
+    def __init__(self, capacity=1000, alpha=0.6, beta=0.4):
+        self.capacity = capacity
+        self.alpha = alpha
+        self.beta = beta
+        self.memory = []
+        self.priorities = []
+
+    def store(self, experience, priority):
+        if len(self.memory) >= self.capacity:
+            self.memory.pop(0)
+            self.priorities.pop(0)
+        self.memory.append(experience)
+        self.priorities.append(priority)
+
+    def sample(self, batch_size):
+        priorities = np.array(self.priorities) ** self.alpha
+        prob = priorities / np.sum(priorities)
+        indices = np.random.choice(len(self.memory), batch_size, p=prob)
+        experiences = [self.memory[i] for i in indices]
+        weights = (1 / len(self.memory) / prob[indices]) ** self.beta
+        return experiences, weights
+
+    def update(self, indices, td_errors):
+        for i, td_error in zip(indices, td_errors):
+            self.priorities[i] = td_error + 1e-5  # Small epsilon to prevent zero priority
+
+# Defining the Q-learning Agent
+class QLearningAgent:
+    def __init__(self, alpha=0.1, gamma=0.9, epsilon=0.1, memory_capacity=1000):
+        self.alpha = alpha  # learning rate
+        self.gamma = gamma  # discount factor
+        self.epsilon = epsilon  # exploration rate
+        self.memory = PER(memory_capacity)
+        self.model = self.build_model()
+
+    def build_model(self):
+        model = tf.keras.Sequential([
+            layers.Dense(128, activation='relu', input_dim=n_states),
+            layers.Dense(128, activation='relu'),
+            layers.Dense(n_actions, activation='linear')
+        ])
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mse')
+        return model
+
+    def act(self, state):
+        if random.random() < self.epsilon:
+            return random.randint(0, n_actions - 1)  # Random action (exploration)
+        q_values = self.model.predict(state.reshape(1, -1))
+        return np.argmax(q_values[0])  # Action with the highest Q-value (exploitation)
+
+    def train(self, batch_size=32):
+        experiences, weights = self.memory.sample(batch_size)
+        states, actions, rewards, next_states, dones = zip(*experiences)
+        states = np.array(states)
+        next_states = np.array(next_states)
+
+        q_values_next = self.model.predict(next_states)
+        target = rewards + self.gamma * np.max(q_values_next, axis=1) * (1 - np.array(dones))
+
+        q_values = self.model.predict(states)
+        for i, action in enumerate(actions):
+            q_values[i][action] = target[i]
+
+        self.model.fit(states, q_values, sample_weight=weights, epochs=1, verbose=0)
+
+# Environment Dynamics
+def step(state, action):
+    row, col = divmod(state, grid_size)
+    if action == 0: row -= 1  # Up
+    if action == 1: row += 1  # Down
+    if action == 2: col -= 1  # Left
+    if action == 3: col += 1  # Right
+    row = max(0, min(row, grid_size - 1))  # Ensure within bounds
+    col = max(0, min(col, grid_size - 1))  # Ensure within bounds
+    new_state = row * grid_size + col
+    reward = -1  # Default reward for moving
+    if (row, col) == castle_pos:
+        reward = 100  # Reached castle (goal)
+    if (row, col) in obstacles:
+        reward = -100  # Hit obstacle
+    return new_state, reward
+
+# Train the agent
+def train(agent, episodes=1000, batch_size=32):
+    for episode in range(episodes):
+        state = 0  # Start at top-left corner (state 0)
+        done = False
+        while not done:
+            action = agent.act(np.array([state]))  # Select action based on Q-values
+            next_state, reward = step(state, action)  # Get next state and reward
+            done = (next_state == castle_pos)  # Check if reached the castle
+            td_error = reward + agent.gamma * np.max(agent.model.predict(np.array([next_state]))) - np.max(agent.model.predict(np.array([state])))
+            agent.memory.store((state, action, reward, next_state, done), abs(td_error))  # Store in memory with priority
+            agent.train(batch_size)  # Train the agent using the experiences in memory
+            state = next_state
+
+# Initialize and train the agent
+agent = QLearningAgent(memory_capacity=1000)
+train(agent)
+
+print("Training Complete!")
