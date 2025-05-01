@@ -1,0 +1,130 @@
+import numpy as np
+import random
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, Input
+from tensorflow.keras.optimizers import Adam
+import matplotlib.pyplot as plt
+
+# Simulated Maze Environment - Basic setup
+class MazeEnv:
+    def __init__(self):
+        self.state_space = 16  # 4x4 grid (simplified maze)
+        self.action_space = 4  # up, down, left, right
+        self.state = 0  # Starting state
+        self.done = False
+
+    def reset(self):
+        self.state = 0
+        self.done = False
+        return self.state
+
+    def step(self, action):
+        reward = -1  # Default reward
+        if action == self.state + 1:  # Simplified condition for goal
+            reward = 10
+            self.done = True
+        self.state = (self.state + action) % self.state_space  # Simplified state update
+        return self.state, reward, self.done
+
+# Dueling DQN Model
+class DuelingDQN(Model):
+    def __init__(self, state_space, action_space):
+        super(DuelingDQN, self).__init__()
+        self.state_space = state_space
+        self.action_space = action_space
+        # Shared layers
+        self.dense1 = Dense(128, activation='relu', input_shape=(state_space,))
+        self.dense2 = Dense(128, activation='relu')
+
+        # Value stream
+        self.value_stream = Dense(1)
+
+        # Advantage stream
+        self.advantage_stream = Dense(action_space)
+
+    def call(self, state):
+        x = self.dense1(state)
+        x = self.dense2(x)
+
+        # Value and Advantage
+        value = self.value_stream(x)
+        advantage = self.advantage_stream(x)
+
+        # Combine value and advantage to get Q-values
+        q_values = value + (advantage - tf.reduce_mean(advantage, axis=1, keepdims=True))
+        return q_values
+
+# DQN Agent (with Dueling Network)
+class DQNAgent:
+    def __init__(self, state_space, action_space):
+        self.model = DuelingDQN(state_space, action_space)
+        self.target_model = DuelingDQN(state_space, action_space)
+        self.target_model.set_weights(self.model.get_weights())
+        self.epsilon = 0.1
+        self.gamma = 0.9
+        self.memory = []
+        self.batch_size = 32
+        self.optimizer = Adam(lr=0.001)
+
+    def remember(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done))
+
+    def act(self, state):
+        if np.random.rand() <= self.epsilon:
+            return random.randint(0, self.model.action_space - 1)
+        q_values = self.model.predict(state)
+        return np.argmax(q_values[0])
+
+    def replay(self):
+        if len(self.memory) < self.batch_size:
+            return
+        batch = random.sample(self.memory, self.batch_size)
+        for state, action, reward, next_state, done in batch:
+            target = reward
+            if not done:
+                next_action = np.argmax(self.model.predict(next_state)[0])
+                target = reward + self.gamma * self.target_model.predict(next_state)[0][next_action]
+            with tf.GradientTape() as tape:
+                q_values = self.model(state)
+                loss = tf.reduce_mean(tf.square(target - q_values[0][action]))
+            grads = tape.gradient(loss, self.model.trainable_variables)
+            self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+
+    def update_target(self):
+        self.target_model.set_weights(self.model.get_weights())
+
+# Training function for DQN with Dueling Network
+def train_agent():
+    env = MazeEnv()
+    agent = DQNAgent(env.state_space, env.action_space)
+    episodes = 500
+    rewards = []
+    for episode in range(episodes):
+        state = env.reset()
+        done = False
+        total_reward = 0
+        while not done:
+            state_input = np.zeros(env.state_space)
+            state_input[state] = 1
+            action = agent.act(state_input)
+            next_state, reward, done = env.step(action)
+            next_state_input = np.zeros(env.state_space)
+            next_state_input[next_state] = 1
+            agent.remember(state_input, action, reward, next_state_input, done)
+            agent.replay()
+            agent.update_target()  # Update target model periodically
+            state = next_state
+            total_reward += reward
+        rewards.append(total_reward)
+    return rewards
+
+# Run training for Dueling DQN
+dueling_rewards = train_agent()
+
+# Plot performance
+plt.plot(dueling_rewards, label="Dueling DQN")
+plt.xlabel('Episodes')
+plt.ylabel('Total Reward')
+plt.legend()
+plt.show()
