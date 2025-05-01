@@ -1,0 +1,12 @@
+import gym
+from stable_baselines3 import PPO
+
+env = gym.make("FrozenLake-v1", is_slippery=False)  # acts like a simple map
+model = PPO("MlpPolicy", env, verbose=0)
+model.learn(total_timesteps=2000)
+obs = env.reset()
+for _ in range(10):
+    action, _ = model.predict(obs)
+    obs, reward, done, _ = env.step(action)
+    print(f"Step -> Action: {action}, Reward: {reward}")
+    if done: break
