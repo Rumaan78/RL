@@ -1,0 +1,108 @@
+import numpy as np
+import random
+
+# Environment setup: 5x5 grid (state space size 25)
+grid_size = 5
+n_actions = 4  # Up, Down, Left, Right
+max_steps = 100  # Maximum steps per episode
+
+# Initialize the environment's reward grid
+reward_grid = np.zeros((grid_size, grid_size))
+reward_grid[grid_size-1, grid_size-1] = 1  # Goal state with reward 1
+reward_grid[0, 0] = -1  # Start state with a penalty
+
+# Helper function to map 2D coordinates to 1D state
+def state_to_index(x, y):
+    return x * grid_size + y
+
+# Helper function to map 1D state back to 2D coordinates
+def index_to_state(index):
+    return divmod(index, grid_size)
+
+# Algorithm Setup
+alpha = 0.1  # Learning rate
+gamma = 0.9  # Discount factor
+epsilon = 0.1  # Exploration rate
+
+# Initialize Q-tables for each algorithm
+Q_td = np.zeros((grid_size * grid_size, n_actions))  # TD(0)
+Q_sarsa = np.zeros((grid_size * grid_size, n_actions))  # SARSA
+Q_qlearning = np.zeros((grid_size * grid_size, n_actions))  # Q-learning
+
+# Simple environment interaction function
+def get_next_state(state, action):
+    x, y = index_to_state(state)
+    if action == 0:  # Up
+        x = max(x - 1, 0)
+    elif action == 1:  # Down
+        x = min(x + 1, grid_size - 1)
+    elif action == 2:  # Left
+        y = max(y - 1, 0)
+    elif action == 3:  # Right
+        y = min(y + 1, grid_size - 1)
+    
+    next_state = state_to_index(x, y)
+    reward = reward_grid[x, y]
+    return next_state, reward
+
+# Training loop for each train/algorithm
+def run_training(algorithm):
+    num_episodes = 1000  # Number of training episodes
+    max_reward_steps = 0
+    for episode in range(num_episodes):
+        state = state_to_index(0, 0)  # Start at the top-left corner
+        done = False
+        steps = 0
+
+        if algorithm == 'TD':
+            while not done and steps < max_steps:
+                action = random.choice(range(n_actions)) if random.random() < epsilon else np.argmax(Q_td[state])
+                next_state, reward = get_next_state(state, action)
+                Q_td[state, action] += alpha * (reward + gamma * np.max(Q_td[next_state]) - Q_td[state, action])  # TD(0) update
+                state = next_state
+                steps += 1
+                if reward == 1:  # Goal reached
+                    done = True
+        elif algorithm == 'SARSA':
+            while not done and steps < max_steps:
+                action = random.choice(range(n_actions)) if random.random() < epsilon else np.argmax(Q_sarsa[state])
+                next_state, reward = get_next_state(state, action)
+                next_action = random.choice(range(n_actions)) if random.random() < epsilon else np.argmax(Q_sarsa[next_state])
+                Q_sarsa[state, action] += alpha * (reward + gamma * Q_sarsa[next_state, next_action] - Q_sarsa[state, action])  # SARSA update
+                state = next_state
+                action = next_action
+                steps += 1
+                if reward == 1:  # Goal reached
+                    done = True
+        elif algorithm == 'Q-Learning':
+            while not done and steps < max_steps:
+                action = random.choice(range(n_actions)) if random.random() < epsilon else np.argmax(Q_qlearning[state])
+                next_state, reward = get_next_state(state, action)
+                Q_qlearning[state, action] += alpha * (reward + gamma * np.max(Q_qlearning[next_state]) - Q_qlearning[state, action])  # Q-Learning update
+                state = next_state
+                steps += 1
+                if reward == 1:  # Goal reached
+                    done = True
+        
+        # Track the number of steps taken to reach the goal
+        if done:
+            max_reward_steps = max(max_reward_steps, steps)
+    
+    return max_reward_steps
+
+# Run and compare all three algorithms
+td_steps = run_training('TD')
+sarsa_steps = run_training('SARSA')
+qlearning_steps = run_training('Q-Learning')
+
+print(f"TD(0) Steps to Max Reward: {td_steps}")
+print(f"SARSA Steps to Max Reward: {sarsa_steps}")
+print(f"Q-Learning Steps to Max Reward: {qlearning_steps}")
+
+# Compare which algorithm performs best
+if td_steps < sarsa_steps and td_steps < qlearning_steps:
+    print("TD(0) outperforms others.")
+elif sarsa_steps < td_steps and sarsa_steps < qlearning_steps:
+    print("SARSA outperforms others.")
+else:
+    print("Q-Learning outperforms others.")
