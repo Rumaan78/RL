@@ -1,0 +1,14 @@
+import threading, time, random
+
+def clock_sim(name):
+    for _ in range(5):
+        print(f"{name}: {time.time() % 60:.2f}")
+        time.sleep(random.uniform(0.5, 1.0))
+
+threads = []
+for zone in ["A2C_Clock", "A3C_Clock"]:
+    t = threading.Thread(target=clock_sim, args=(zone,))
+    threads.append(t)
+    t.start()
+
+for t in threads: t.join()
