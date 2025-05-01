@@ -1,0 +1,18 @@
+import torch, torch.nn as nn
+
+env = [0, 0, 0, 0, 1]  # Goal at position 4
+model = nn.Linear(1, 1)  # Tiny neural net
+opt = torch.optim.SGD(model.parameters(), lr=0.1)
+
+for _ in range(100):
+  pos = torch.tensor([[0.]], requires_grad=False)
+  for _ in range(5):
+    q = model(pos)
+    action = 1 if q.item() > 0 else -1
+    pos = torch.clamp(pos + action, 0, 4)
+    reward = env[int(pos.item())]
+    loss = (q - reward) ** 2
+    opt.zero_grad(); loss.backward(); opt.step()
+    if reward: break
+
+print("Learned weight:", model.weight.item())
