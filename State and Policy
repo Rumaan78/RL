@@ -1,0 +1,19 @@
+V = {(0,0):0, (0,1):0, (1,0):0, (1,1):1}  # State values
+P = {(0,0):'R', (0,1):'D', (1,0):'R', (1,1):'-'}  # Policy
+g = 0.9  # Discount
+
+def move(s, a):
+  i,j = s
+  if a=='R': j = min(j+1,1)
+  if a=='D': i = min(i+1,1)
+  return (i,j)
+
+for _ in range(5):
+  for s in V:
+    if s == (1,1): continue
+    a = P[s]
+    s1 = move(s,a)
+    V[s] = g * V[s1]
+
+print("V:", V)
+print("P:", P)
