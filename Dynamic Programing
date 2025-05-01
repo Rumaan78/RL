@@ -1,0 +1,27 @@
+import numpy as np
+
+# Define the environment (MDP)
+S = 4  # States
+A = 2  # Actions
+R = np.array([[-1, 0], [-1, 10], [0, -1], [0, 0]])  # Reward matrix
+P = np.array([[[0.8, 0.2], [0.1, 0.9]],  # Transition probabilities for each state-action pair
+              [[0.9, 0.1], [0.05, 0.95]],
+              [[0.7, 0.3], [0.4, 0.6]],
+              [[1.0, 0.0], [1.0, 0.0]]])
+
+V = np.zeros(S)  # Value function initialized to 0
+gamma = 0.9  # Discount factor
+
+# Value Iteration
+for i in range(100):  # 100 iterations or until convergence
+    V_new = np.copy(V)
+    for s in range(S):
+        Q = np.zeros(A)
+        for a in range(A):
+            Q[a] = R[s][a] + gamma * np.dot(P[s][a], V)
+        V_new[s] = np.max(Q)
+    if np.max(np.abs(V_new - V)) < 0.01:  # Convergence check
+        break
+    V = V_new
+
+print("Optimal Value Function:", V)
