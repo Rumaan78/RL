@@ -1,0 +1,113 @@
+import random
+
+# Tic-Tac-Toe Environment
+def check_win(board, player):
+    for row in range(3):
+        if all([board[row][col] == player for col in range(3)]): return True
+    for col in range(3):
+        if all([board[row][col] == player for row in range(3)]): return True
+    if all([board[i][i] == player for i in range(3)]): return True
+    if all([board[i][2-i] == player for i in range(3)]): return True
+    return False
+
+def get_empty_positions(board):
+    return [(r, c) for r in range(3) for c in range(3) if board[r][c] == 0]
+
+def is_full(board):
+    return all([board[r][c] != 0 for r in range(3) for c in range(3)])
+
+# Q-learning with Temporal Difference (TD) strategy
+def td0_training():
+    alpha = 0.1  # Learning rate
+    gamma = 0.9  # Discount factor
+    epsilon = 0.1  # Exploration rate
+    Q = {}  # Q-table: key = board state, value = action values
+    
+    def get_q_values(board):
+        state = tuple(tuple(row) for row in board)
+        if state not in Q:
+            Q[state] = {action: 0 for action in get_empty_positions(board)}
+        return Q[state]
+
+    def choose_action(board):
+        if random.random() < epsilon:  # Exploration
+            return random.choice(get_empty_positions(board))
+        else:  # Exploitation
+            q_values = get_q_values(board)
+            return max(q_values, key=q_values.get)
+    
+    def update_q_value(board, action, reward, next_board):
+        state = tuple(tuple(row) for row in board)
+        next_state = tuple(tuple(row) for row in next_board)
+        q_values = get_q_values(board)
+        next_q_values = get_q_values(next_board)
+        max_future_q = max(next_q_values.values()) if next_state in Q else 0
+        q_values[action] += alpha * (reward + gamma * max_future_q - q_values[action])
+
+    def play_game():
+        board = [[0] * 3 for _ in range(3)]
+        done = False
+        current_player = 1
+        states = []
+        
+        while not done:
+            action = choose_action(board)
+            board[action[0]][action[1]] = current_player
+            states.append((board, action))
+            
+            if check_win(board, current_player):
+                reward = 1  # Winning reward
+                done = True
+            elif is_full(board):
+                reward = 0  # Draw
+                done = True
+            else:
+                reward = 0  # Ongoing game
+            
+            # Update Q-values
+            for state, action in states:
+                update_q_value(state, action, reward, board)
+            
+            # Alternate player
+            current_player = -current_player
+
+        return reward
+    
+    # Training loop
+    for episode in range(10000):  # Number of games to train
+        play_game()
+        
+    return Q
+
+# Play against the system
+def play_against_system(Q):
+    board = [[0] * 3 for _ in range(3)]
+    done = False
+    current_player = 1
+    while not done:
+        if current_player == 1:  # Player's turn (you play as 'X')
+            row, col = map(int, input("Enter row and column (0-2): ").split())
+            if board[row][col] == 0:
+                board[row][col] = 1
+            else:
+                print("Invalid move. Try again.")
+                continue
+        else:  # System's turn (plays as 'O')
+            action = max(get_q_values(board), key=get_q_values(board).get)
+            board[action[0]][action[1]] = -1
+        
+        for row in board:
+            print(row)
+        
+        if check_win(board, current_player):
+            print("Player wins!" if current_player == 1 else "System wins!")
+            done = True
+        elif is_full(board):
+            print("It's a draw!")
+            done = True
+        
+        current_player = -current_player
+
+# Run the TD(0) training and then play against the system
+Q = td0_training()
+play_against_system(Q)
