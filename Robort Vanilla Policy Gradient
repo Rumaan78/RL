@@ -1,0 +1,104 @@
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras import layers
+
+# Define the environment
+class LineFollowingEnv:
+    def __init__(self):
+        self.position = 0  # Initial position of the robot
+        self.track_length = 10  # Length of the line track
+        self.goal_position = self.track_length - 1
+
+    def reset(self):
+        self.position = 0  # Reset position
+        return self.position
+
+    def step(self, action):
+        # Action: 0 = Move left, 1 = Stay, 2 = Move right
+        if action == 0:
+            self.position = max(self.position - 1, 0)
+        elif action == 1:
+            pass  # Stay in the same position
+        elif action == 2:
+            self.position = min(self.position + 1, self.track_length - 1)
+
+        # Reward: +1 for staying on the track, -1 for going out of bounds
+        reward = 1 if self.position != 0 and self.position != self.goal_position else -1
+        done = self.position == self.goal_position
+        return self.position, reward, done
+
+# Define the Policy Gradient model
+class PolicyGradientModel(tf.keras.Model):
+    def __init__(self, state_size, action_size):
+        super(PolicyGradientModel, self).__init__()
+        self.dense1 = layers.Dense(128, activation='relu', input_shape=(state_size,))
+        self.dense2 = layers.Dense(128, activation='relu')
+        self.output_layer = layers.Dense(action_size, activation='softmax')
+
+    def call(self, state):
+        x = self.dense1(state)
+        x = self.dense2(x)
+        return self.output_layer(x)
+
+# Define the agent using Vanilla Policy Gradient
+class PGAgent:
+    def __init__(self, state_size, action_size, learning_rate=0.01, gamma=0.99):
+        self.model = PolicyGradientModel(state_size, action_size)
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate)
+        self.gamma = gamma  # Discount factor
+
+    def get_action(self, state):
+        state = np.array(state).reshape([1, -1])
+        action_probs = self.model(state)
+        action = np.random.choice(len(action_probs[0]), p=action_probs[0].numpy())
+        return action
+
+    def train(self, states, actions, rewards):
+        # Calculate discounted rewards
+        discounted_rewards = []
+        cumulative_reward = 0
+        for reward in reversed(rewards):
+            cumulative_reward = reward + self.gamma * cumulative_reward
+            discounted_rewards.insert(0, cumulative_reward)
+        discounted_rewards = np.array(discounted_rewards)
+
+        with tf.GradientTape() as tape:
+            total_loss = 0
+            for state, action, reward in zip(states, actions, discounted_rewards):
+                state = np.array(state).reshape([1, -1])
+                action_prob = self.model(state)
+                action_prob = action_prob[0, action]
+                total_loss -= tf.math.log(action_prob) * reward
+
+        grads = tape.gradient(total_loss, self.model.trainable_variables)
+        self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+
+# Training the agent
+env = LineFollowingEnv()
+state_size = 1  # Position of the robot on the line
+action_size = 3  # Actions: [Move Left, Stay, Move Right]
+agent = PGAgent(state_size, action_size)
+
+def train_agent(episodes=1000):
+    for e in range(episodes):
+        state = env.reset()
+        done = False
+        states, actions, rewards = [], [], []
+
+        while not done:
+            action = agent.get_action([state])
+            next_state, reward, done = env.step(action)
+
+            states.append([state])
+            actions.append(action)
+            rewards.append(reward)
+
+            state = next_state
+
+        agent.train(states, actions, rewards)
+        if e % 100 == 0:
+            print(f"Episode {e} completed")
+
+train_agent()  # Train the agent
+
+print("Training complete!")
