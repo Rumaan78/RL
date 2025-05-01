@@ -1,0 +1,33 @@
+import numpy as np
+import random
+
+# Environment setup
+n_actions = 4  # Up, Down, Left, Right
+n_states = 16  # 4x4 grid
+q_table = np.zeros((n_states, n_actions))
+
+# Actions: 0=Up, 1=Down, 2=Left, 3=Right
+# States: 4x4 grid, goal is at state 15 (bottom-right corner)
+def step(state, action):
+    if action == 0: state -= 4  # Up
+    if action == 1: state += 4  # Down
+    if action == 2: state -= 1  # Left
+    if action == 3: state += 1  # Right
+    state = max(0, min(state, n_states - 1))  # Keep in bounds
+    reward = 100 if state == 15 else -1  # Reward for reaching the cheese
+    return state, reward
+
+# Training the mouse
+def train(epochs=500):
+    for _ in range(epochs):
+        state = 0  # Start position (top-left corner)
+        done = False
+        while not done:
+            action = np.argmax(q_table[state]) if random.uniform(0, 1) > 0.1 else random.randint(0, n_actions-1)
+            next_state, reward = step(state, action)
+            q_table[state, action] = q_table[state, action] + 0.1 * (reward + 0.9 * np.max(q_table[next_state]) - q_table[state, action])
+            state = next_state
+            if state == 15: done = True
+
+train()  # Train the mouse
+print(q_table)  # Display the Q-table
