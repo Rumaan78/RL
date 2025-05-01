@@ -1,0 +1,146 @@
+import numpy as np
+import tensorflow as tf
+import random
+import matplotlib.pyplot as plt
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.optimizers import Adam
+
+# Simple robot track environment (1D grid)
+class TrackEnv:
+    def __init__(self, track_length=10):
+        self.track_length = track_length
+        self.reset()
+
+    def reset(self):
+        self.state = 0  # Start at the beginning of the track
+        self.done = False
+        return self.state
+
+    def step(self, action):
+        reward = -1  # Default step cost
+        if action == 1:  # Move forward
+            self.state += 1
+        if self.state == self.track_length:  # Goal state
+            reward = 100  # Maximum reward for reaching the end
+            self.done = True
+        return self.state, reward, self.done
+
+# DQN Model
+class DQNModel(Model):
+    def __init__(self, state_space, action_space):
+        super(DQNModel, self).__init__()
+        self.dense1 = Dense(64, activation='relu', input_shape=(state_space,))
+        self.dense2 = Dense(64, activation='relu')
+        self.output_layer = Dense(action_space)
+
+    def call(self, state):
+        x = self.dense1(state)
+        x = self.dense2(x)
+        return self.output_layer(x)
+
+# DDQN Model (Double DQN)
+class DDQNModel(DQNModel):
+    def __init__(self, state_space, action_space):
+        super(DDQNModel, self).__init__(state_space, action_space)
+
+# DDDQN Model (Dueling DQN)
+class DDDQNModel(DQNModel):
+    def __init__(self, state_space, action_space):
+        super(DDDQNModel, self).__init__(state_space, action_space)
+        self.value_stream = Dense(1)
+        self.advantage_stream = Dense(action_space)
+
+    def call(self, state):
+        x = self.dense1(state)
+        x = self.dense2(x)
+        value = self.value_stream(x)
+        advantage = self.advantage_stream(x)
+        q_values = value + (advantage - tf.reduce_mean(advantage, axis=1, keepdims=True))
+        return q_values
+
+# Q-Learning Agent
+class QLearningAgent:
+    def __init__(self, state_space, action_space, model_type="DQN"):
+        self.model_type = model_type
+        if model_type == "DQN":
+            self.model = DQNModel(state_space, action_space)
+        elif model_type == "DDQN":
+            self.model = DDQNModel(state_space, action_space)
+        else:  # DDDQN
+            self.model = DDDQNModel(state_space, action_space)
+        self.target_model = self.model.__class__(state_space, action_space)
+        self.target_model.set_weights(self.model.get_weights())
+        self.optimizer = Adam(learning_rate=0.001)
+        self.epsilon = 0.1
+        self.gamma = 0.9
+        self.memory = []
+        self.batch_size = 32
+
+    def act(self, state):
+        if np.random.rand() <= self.epsilon:
+            return random.randint(0, 1)  # Random action: 0 (stay), 1 (move forward)
+        q_values = self.model(state)
+        return np.argmax(q_values[0])
+
+    def replay(self):
+        if len(self.memory) < self.batch_size:
+            return
+        batch = random.sample(self.memory, self.batch_size)
+        for state, action, reward, next_state, done in batch:
+            target = reward
+            if not done:
+                next_action = np.argmax(self.model.predict(next_state)[0])
+                target = reward + self.gamma * self.target_model.predict(next_state)[0][next_action]
+            with tf.GradientTape() as tape:
+                q_values = self.model(state)
+                loss = tf.reduce_mean(tf.square(target - q_values[0][action]))
+            grads = tape.gradient(loss, self.model.trainable_variables)
+            self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+
+    def update_target(self):
+        self.target_model.set_weights(self.model.get_weights())
+
+# Training Function
+def train_robot(agent, env, episodes=1000):
+    rewards = []
+    for episode in range(episodes):
+        state = env.reset()
+        state_input = np.zeros(env.track_length)
+        state_input[state] = 1
+        done = False
+        total_reward = 0
+        while not done:
+            action = agent.act(state_input)
+            next_state, reward, done = env.step(action)
+            next_state_input = np.zeros(env.track_length)
+            next_state_input[next_state] = 1
+            agent.memory.append((state_input, action, reward, next_state_input, done))
+            agent.replay()
+            agent.update_target()
+            state = next_state
+            state_input = next_state_input
+            total_reward += reward
+        rewards.append(total_reward)
+    return rewards
+
+# Run and compare the robots
+env = TrackEnv()
+agents = {
+    "DQN": QLearningAgent(env.track_length, 2, "DQN"),
+    "DDQN": QLearningAgent(env.track_length, 2, "DDQN"),
+    "DDDQN": QLearningAgent(env.track_length, 2, "DDDQN")
+}
+
+rewards = {}
+for agent_name, agent in agents.items():
+    rewards[agent_name] = train_robot(agent, env)
+
+# Plotting results
+plt.plot(rewards["DQN"], label="DQN")
+plt.plot(rewards["DDQN"], label="DDQN")
+plt.plot(rewards["DDDQN"], label="DDDQN")
+plt.xlabel('Episodes')
+plt.ylabel('Total Reward')
+plt.legend()
+plt.show()
