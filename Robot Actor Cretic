@@ -1,0 +1,12 @@
+import tensorflow as tf, numpy as np
+from tensorflow.keras import layers
+
+state = np.array([[0.5]])  # dummy zig-zag state
+actor = tf.keras.Sequential([layers.Dense(16, activation='relu'), layers.Dense(2, activation='softmax')])
+critic = tf.keras.Sequential([layers.Dense(16, activation='relu'), layers.Dense(1)])
+
+action_probs = actor(state)
+value = critic(state)
+action = tf.random.categorical(tf.math.log(action_probs), 1)
+
+# Reward logic and training loop would go here for full implementation
