@@ -1,0 +1,97 @@
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras import layers
+import random
+
+# Environment setup
+n_actions = 4  # Up, Down, Left, Right
+n_states = 16  # 4x4 grid
+q_table = np.zeros((n_states, n_actions))  # Q-table initialization
+gamma = 0.9  # Discount factor
+
+# Defining a simple Dueling DQN model
+class DuelingDQN(tf.keras.Model):
+    def __init__(self):
+        super(DuelingDQN, self).__init__()
+        self.dense1 = layers.Dense(128, activation='relu')
+        self.dense2 = layers.Dense(128, activation='relu')
+        self.value_stream = layers.Dense(1)  # Value stream
+        self.advantage_stream = layers.Dense(n_actions)  # Advantage stream
+
+    def call(self, state):
+        x = self.dense1(state)
+        x = self.dense2(x)
+        value = self.value_stream(x)
+        advantage = self.advantage_stream(x)
+        q_values = value + (advantage - tf.reduce_mean(advantage, axis=1, keepdims=True))
+        return q_values
+
+# Environment dynamics
+def step(state, action):
+    reward = -1
+    if action == 0: state -= 4  # Up
+    if action == 1: state += 4  # Down
+    if action == 2: state -= 1  # Left
+    if action == 3: state += 1  # Right
+    state = max(0, min(state, n_states - 1))  # Ensure within grid bounds
+    if state == 15:  # Cheese at state 15
+        reward = 100
+    if state == 5:  # Poison at state 5
+        reward = -100  # Negative reward for poison
+    return state, reward
+
+# Q-learning Agent with Dueling DQN
+class DQNAgent:
+    def __init__(self):
+        self.model = DuelingDQN()
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+        self.epsilon = 0.1  # Exploration probability
+        self.memory = []
+        self.batch_size = 32
+
+    def act(self, state):
+        if random.random() < self.epsilon:
+            return random.randint(0, n_actions-1)  # Random action
+        state_input = np.array([state])
+        q_values = self.model(state_input)
+        return np.argmax(q_values[0])
+
+    def replay(self):
+        if len(self.memory) < self.batch_size:
+            return
+        batch = random.sample(self.memory, self.batch_size)
+        for state, action, reward, next_state, done in batch:
+            target = reward
+            if not done:
+                next_q_values = self.model(np.array([next_state]))
+                target = reward + gamma * np.max(next_q_values)
+            with tf.GradientTape() as tape:
+                q_values = self.model(np.array([state]))
+                loss = tf.reduce_mean(tf.square(target - q_values[0][action]))
+            grads = tape.gradient(loss, self.model.trainable_variables)
+            self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+
+    def remember(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done))
+
+# Training the Agent
+def train(agent, episodes=1000):
+    for episode in range(episodes):
+        state = 0  # Start at the top-left corner
+        done = False
+        while not done:
+            action = agent.act(state)
+            next_state, reward = step(state, action)
+            agent.remember(state, action, reward, next_state, done)
+            agent.replay()
+            state = next_state
+            if state == 15:  # Cheese reached
+                done = True
+
+# Initialize agent and train it
+agent = DQNAgent()
+train(agent)
+
+# Print out the Q-table after training
+print("Trained Q-table:")
+print(agent.model.summary())
