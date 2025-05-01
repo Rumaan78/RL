@@ -1,0 +1,13 @@
+import gym
+from stable_baselines3 import DDPG
+
+env = gym.make("Pendulum-v1")  # Use a continuous control task
+model = DDPG("MlpPolicy", env, verbose=0)
+model.learn(total_timesteps=5000)
+
+obs = env.reset()
+for _ in range(10):
+    action, _ = model.predict(obs)
+    obs, reward, done, _ = env.step(action)
+    print(f"Action: {action}, Reward: {reward}")
+
