@@ -1,0 +1,21 @@
+import numpy as np, gym, tensorflow as tf
+env = gym.make('CartPole-v1')
+model = tf.keras.Sequential([tf.keras.layers.Dense(24, activation='relu', input_shape=(4,)), tf.keras.layers.Dense(2)])
+optimizer = tf.keras.optimizers.Adam(0.01)
+
+def train_step(s, a, r, ns, done):
+    with tf.GradientTape() as tape:
+        target = r + (1 - done) * 0.99 * np.max(model(ns))
+        loss = tf.reduce_mean((target - model(s)[0, a]) ** 2)
+    grads = tape.gradient(loss, model.trainable_variables)
+    optimizer.apply_gradients(zip(grads, model.trainable_variables))
+
+for ep in range(100):
+    s, done, r = env.reset(), False, 0
+    while not done:
+        a = np.argmax(model(s)[0])
+        ns, reward, done, _, _ = env.step(a)
+        r = reward if not done else -10
+        train_step(s, a, r, ns, done)
+        s = ns
+    print(f"Episode {ep+1} completed.")
