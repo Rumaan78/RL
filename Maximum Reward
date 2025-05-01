@@ -1,0 +1,17 @@
+import numpy as np
+
+V = np.zeros((3, 4))
+R = np.zeros((3, 4))
+R[0, 3] = -1  # Fire at (1,4)
+R[1, 3] = 1   # Goal at (2,4)
+g = 0.9
+
+for _ in range(10):
+  for i in range(3):
+    for j in range(4):
+      if (i,j) in [(0,3), (1,3)]: continue
+      V[i,j] = max([R[ni,nj]+g*V[ni,nj]
+        for ni,nj in [(i-1,j),(i+1,j),(i,j-1),(i,j+1)]
+        if 0<=ni<3 and 0<=nj<4])
+
+print(V.round(2))
