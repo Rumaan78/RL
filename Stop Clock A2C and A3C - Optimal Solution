@@ -1,0 +1,14 @@
+import threading, time, random
+
+def clock_agent(zone):
+    for _ in range(5):
+        local_time = time.time() + random.randint(-60, 60)  # simulate drift
+        correction = -1 if abs(local_time - time.time()) > 30 else 1  # reward
+        print(f"{zone} | Time: {local_time % 60:.2f} | Reward: {correction}")
+        time.sleep(random.uniform(0.5, 1.0))  # simulate async update
+
+zones = ["UTC", "IST", "EST", "JST"]
+threads = [threading.Thread(target=clock_agent, args=(z,)) for z in zones]
+
+for t in threads: t.start()
+for t in threads: t.join()
