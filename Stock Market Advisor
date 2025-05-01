@@ -1,0 +1,18 @@
+import numpy as np, tensorflow as tf
+from tensorflow.keras import layers
+
+model = tf.keras.Sequential([layers.Dense(8, activation='relu', input_shape=(1,)), layers.Dense(2, activation='softmax')])
+opt = tf.keras.optimizers.Adam(0.01)
+
+def train(prices, episodes=100):
+    for _ in range(episodes):
+        with tf.GradientTape() as tape:
+            logits = model(np.array(prices))
+            actions = tf.random.categorical(tf.math.log(logits), 1)
+            rewards = [1 if prices[i+1] > prices[i] else -1 for i in range(len(prices)-1)] + [0]
+            loss = -tf.reduce_mean(tf.math.log(tf.gather(logits, actions, batch_dims=1))[:, 0] * rewards)
+        grads = tape.gradient(loss, model.trainable_variables)
+        opt.apply_gradients(zip(grads, model.trainable_variables))
+
+# Dummy historical stock prices
+train([100, 102, 101, 105, 107, 106])
