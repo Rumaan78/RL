@@ -1,0 +1,123 @@
+import numpy as np
+import random
+
+# Tic-Tac-Toe environment
+def is_winner(board, player):
+    win_conditions = [(0, 1, 2), (3, 4, 5), (6, 7, 8), (0, 3, 6), (1, 4, 7), (2, 5, 8), (0, 4, 8), (2, 4, 6)]
+    for condition in win_conditions:
+        if all([board[i] == player for i in condition]):
+            return True
+    return False
+
+def get_empty_cells(board):
+    return [i for i in range(9) if board[i] == 0]
+
+def display_board(board):
+    for i in range(0, 9, 3):
+        print(f"{board[i]}|{board[i+1]}|{board[i+2]}")
+    print("\n")
+
+# SARSA Implementation for Tic-Tac-Toe
+class SARSA_TicTacToe:
+    def __init__(self, alpha=0.1, gamma=0.9, epsilon=0.1):
+        self.alpha = alpha  # Learning rate
+        self.gamma = gamma  # Discount factor
+        self.epsilon = epsilon  # Exploration rate
+        self.q_table = {}
+        
+    def reset(self):
+        return [0] * 9  # Resetting the board (0 indicates empty cells)
+    
+    def get_state(self, board):
+        return tuple(board)
+    
+    def choose_action(self, board):
+        state = self.get_state(board)
+        if state not in self.q_table:
+            self.q_table[state] = np.zeros(9)
+        if random.uniform(0, 1) < self.epsilon:  # Exploration
+            return random.choice(get_empty_cells(board))
+        else:  # Exploitation
+            return np.argmax(self.q_table[state])
+
+    def update_q_value(self, board, action, reward, next_board, next_action):
+        state = self.get_state(board)
+        next_state = self.get_state(next_board)
+        if next_state not in self.q_table:
+            self.q_table[next_state] = np.zeros(9)
+        self.q_table[state][action] += self.alpha * (reward + self.gamma * self.q_table[next_state][next_action] - self.q_table[state][action])
+
+    def play_game(self):
+        board = self.reset()
+        done = False
+        while not done:
+            action = self.choose_action(board)
+            board[action] = 1  # AI plays 'X' (represented by 1)
+            if is_winner(board, 1):
+                return 1  # AI wins
+            if len(get_empty_cells(board)) == 0:
+                return 0  # Draw
+            # Player's turn (random action)
+            player_action = random.choice(get_empty_cells(board))
+            board[player_action] = -1  # Player plays 'O' (represented by -1)
+            if is_winner(board, -1):
+                return -1  # Player wins
+        return 0  # Draw
+    
+    def train(self, episodes=1000):
+        for _ in range(episodes):
+            board = self.reset()
+            done = False
+            action = self.choose_action(board)
+            while not done:
+                next_board = board.copy()
+                next_board[action] = 1  # AI plays 'X'
+                if is_winner(next_board, 1):
+                    reward = 1  # AI wins
+                    self.update_q_value(board, action, reward, next_board, action)
+                    done = True
+                elif len(get_empty_cells(next_board)) == 0:
+                    reward = 0  # Draw
+                    self.update_q_value(board, action, reward, next_board, action)
+                    done = True
+                else:
+                    player_action = random.choice(get_empty_cells(next_board))
+                    next_board[player_action] = -1  # Player plays 'O'
+                    if is_winner(next_board, -1):
+                        reward = -1  # Player wins
+                        self.update_q_value(board, action, reward, next_board, action)
+                        done = True
+                    else:
+                        next_action = self.choose_action(next_board)
+                        reward = 0  # Ongoing game
+                        self.update_q_value(board, action, reward, next_board, next_action)
+                board = next_board
+                action = next_action
+        print("Training complete.")
+
+# Main execution
+agent = SARSA_TicTacToe()
+agent.train(1000)
+
+# Play the game with the trained agent
+board = agent.reset()
+done = False
+while not done:
+    display_board(board)
+    action = agent.choose_action(board)
+    board[action] = 1  # AI plays 'X'
+    if is_winner(board, 1):
+        display_board(board)
+        print("AI wins!")
+        done = True
+    elif len(get_empty_cells(board)) == 0:
+        display_board(board)
+        print("Draw!")
+        done = True
+    else:
+        player_action = random.choice(get_empty_cells(board))
+        board[player_action] = -1  # Player plays 'O'
+        if is_winner(board, -1):
+            display_board(board)
+            print("Player wins!")
+            done = True
