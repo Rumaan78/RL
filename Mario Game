@@ -1,0 +1,20 @@
+import numpy as np, random
+import gym
+
+# Initialize environment (replace with your Mario environment)
+env = gym.make('Mario-v0')  # Or similar Mario game environment
+Q = np.zeros([env.observation_space.n, env.action_space.n])  # Q-table initialization
+
+alpha, gamma, epsilon = 0.1, 0.99, 0.1  # Learning parameters
+
+for _ in range(1000):  # Training episodes
+    state = env.reset()
+    done = False
+    while not done:
+        action = random.choice(range(env.action_space.n)) if random.random() < epsilon else np.argmax(Q[state])  # Epsilon-greedy action selection
+        next_state, reward, done, _ = env.step(action)
+        Q[state, action] += alpha * (reward + gamma * np.max(Q[next_state]) - Q[state, action])  # Q-value update
+        state = next_state
+    epsilon *= 0.995  # Decay epsilon for more exploitation over time
+
+print("Training Complete!")
