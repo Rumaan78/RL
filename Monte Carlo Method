@@ -1,0 +1,21 @@
+import numpy as np, gym
+
+env = gym.make('FrozenLake-v1', is_slippery=False)
+Q = np.zeros([env.observation_space.n, env.action_space.n])
+alpha, gamma = 0.1, 0.99
+
+for _ in range(1000):
+    state, done = env.reset(), False
+    episode = []
+    while not done:
+        action = np.argmax(Q[state]) if np.random.rand() > 0.1 else env.action_space.sample()
+        next_state, reward, done, _, _ = env.step(action)
+        episode.append((state, action, reward))
+        state = next_state
+
+    G = 0
+    for state, action, reward in reversed(episode):
+        G = gamma * G + reward
+        Q[state, action] += alpha * (G - Q[state, action])
+
+print(Q)
