@@ -1,0 +1,20 @@
+import numpy as np
+
+V = np.zeros((3,3))         # Initialize value table
+R = np.zeros((3,3))         # Reward matrix
+R[2,2] = 1                  # Goal at (2,2)
+g = 0.9                     # Discount factor
+
+# Bellman update
+for _ in range(10):
+  for i in range(3):
+    for j in range(3):
+      if (i,j) == (2,2): continue
+      vals = []
+      for ni,nj in [(i-1,j),(i+1,j),(i,j-1),(i,j+1)]:
+        if 0<=ni<3 and 0<=nj<3:
+          vals.append(R[ni,nj] + g * V[ni,nj])
+      if vals:
+        V[i,j] = max(vals)
+
+print(np.round(V,2))
